@@ -189,12 +189,6 @@ pub trait Register {
     fn get_id(type_id: TypeId) -> Option<BitIndex>;
 }
 
-// trait New<A: Any> {
-//     fn new() -> Box<dyn A> {
-//         Box::new(thing)
-//     }
-// }
-
 fn register_state<A: Any>(state: &mut HashMap<TypeId, BitIndex>) {
     if !(*state).contains_key(&TypeId::of::<A>()) {
         let mut index = INDEX.lock().unwrap();
