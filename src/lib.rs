@@ -2,55 +2,55 @@ mod math;
 mod prelude;
 mod tests;
 
+use lazy_static::lazy_static;
 use math::*;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::ops::Deref;
+use std::sync::Mutex;
 
-pub trait Component {
-    fn id(&self) -> u8;
-    fn mask(&self) -> u8 {
-        1 << self.id()
-    }
-}
+// Bit index, covers up to 128 bits(0-127) or 128 components
+type BitIndex = i8;
+type Component = dyn Any;
 
 pub struct Entity<T, U: BitSet> {
     id: T,
     bitmap: U,
-    components: Vec<Box<dyn Component>>,
+    components: Vec<Box<Component>>,
 }
 
 trait ComponentOps {
-    fn add(self, component: Box<dyn Component>) -> Self;
-    fn add_many(self, components: Vec<Box<dyn Component>>) -> Self;
+    fn add<R: Register>(self, component: Box<Component>) -> Self;
+    fn add_many<R: Register>(self, components: Vec<Box<Component>>) -> Self;
 }
 
 impl<T, U: BitSet> Entity<T, U> {
-    fn new(id: T, components: Vec<Box<dyn Component>>) -> Self {
+    fn new(id: T) -> Self {
         let this = Self {
             id,
             bitmap: U::initialise(),
             components: Default::default(),
         };
-
-        this.add_many(components)
+        this
+        // this.add_many::<R>(components)
     }
 }
 
 impl<T, U: BitSet> ComponentOps for Entity<T, U> {
-    fn add(mut self, component: Box<dyn Component>) -> Self {
-        if let Ok(_) = self.bitmap.set(component.id()) {
-            self.components.push(component);
+    fn add<R: Register>(mut self, component: Box<Component>) -> Self {
+        if let Some(id) = R::get_id(component.deref().type_id()) {
+            if let Ok(_) = self.bitmap.set(id as u8) {
+                self.components.push(component);
+            }
         }
 
         self
     }
 
-    fn add_many(mut self, components: Vec<Box<dyn Component>>) -> Self {
+    fn add_many<R: Register>(mut self, components: Vec<Box<Component>>) -> Self {
         for component in components {
-            if let Ok(_) = self.bitmap.set(component.id()) {
-                self.components.push(component);
-            }
+            self = self.add::<R>(component);
         }
         self
     }
@@ -67,7 +67,7 @@ pub struct GenericWorld<T, U: BitSet> {
 pub trait EntityOps<T, U: BitSet> {
     fn get_entity(&self, id: T) -> Option<&Entity<T, U>>;
 
-    fn spawn(self, components: Vec<Box<dyn Component>>) -> Self;
+    fn spawn(self, components: Vec<Box<Component>>) -> Self;
 
     fn spawn_empty(self) -> Self;
 
@@ -82,9 +82,10 @@ where
         self.entities.get(&id)
     }
 
-    fn spawn(mut self, components: Vec<Box<dyn Component>>) -> Self {
+    fn spawn(mut self, components: Vec<Box<Component>>) -> Self {
         let new_entity_id = self.entity_count.increment();
-        let entity = Entity::new(new_entity_id, components);
+        let mut entity = Entity::new(new_entity_id);
+        entity = entity.add_many::<Self>(components);
         self.entities.insert(new_entity_id, entity);
         self
     }
@@ -167,13 +168,47 @@ impl<T, U: BitSet + Default> Runnable<T, U> for GenericWorld<T, U> where
 {
 }
 
-pub trait Register<T> {
-    fn register<A: Any>();
-    fn get_id(type_id: TypeId) -> Option<T>;
+pub type ComponentSet8 = u8;
+pub type ComponentSet16 = u16;
+pub type ComponentSet32 = u32;
+pub type ComponentSet64 = u64;
+pub type ComponentSet128 = u128;
+
+lazy_static! {
+    static ref WORLD_STATE: Mutex<HashMap<TypeId, BitIndex>> = Mutex::new(HashMap::new());
+    static ref INDEX: Mutex<BitIndex> = Mutex::new(0);
 }
 
-type PrimitiveComponentSet = u8;
-type WorldComponentSet = u128;
+// A world where we have 8 components
+pub type PrimitiveWorld = GenericWorld<u8, ComponentSet8>;
+// A world where we have 128 components
+pub type World = GenericWorld<u128, ComponentSet128>;
 
-pub type PrimitiveWorld = GenericWorld<u8, PrimitiveComponentSet>;
-pub type World = GenericWorld<u128, WorldComponentSet>;
+pub trait Register {
+    fn register<A: Any>();
+    fn get_id(type_id: TypeId) -> Option<BitIndex>;
+}
+
+// trait New<A: Any> {
+//     fn new() -> Box<dyn A> {
+//         Box::new(thing)
+//     }
+// }
+
+fn register_state<A: Any>(state: &mut HashMap<TypeId, BitIndex>) {
+    if !(*state).contains_key(&TypeId::of::<A>()) {
+        let mut index = INDEX.lock().unwrap();
+        state.insert(TypeId::of::<A>(), (*index).into());
+        *index += 1;
+    }
+}
+
+impl<T, U: BitSet> Register for GenericWorld<T, U> {
+    fn register<A: Any>() {
+        register_state::<A>(&mut (*WORLD_STATE.lock().unwrap()));
+    }
+
+    fn get_id(type_id: TypeId) -> Option<BitIndex> {
+        WORLD_STATE.lock().unwrap().get(&type_id).map(|id| *id)
+    }
+}
