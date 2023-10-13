@@ -5,7 +5,6 @@ mod tests {
     struct Name(String);
     struct Age(u8);
 
-    // Box<dyn Any> = Age(50)::new()
     #[test]
     fn create_simple_world() {
         fn f(mask: u8, entities: Vec<&Entity<u8, u8>>) {
