@@ -20,25 +20,23 @@ pub struct Entity<T, U: BitSet> {
     components: Vec<Box<Component>>,
 }
 
-trait ComponentOps {
-    fn add<R: Register>(self, component: Box<Component>) -> Self;
-    fn add_many<R: Register>(self, components: Vec<Box<Component>>) -> Self;
+trait ComponentOps<U: BitSet> {
+    fn add<R: Register<U>>(self, component: Box<Component>) -> Self;
+    fn add_many<R: Register<U>>(self, components: Vec<Box<Component>>) -> Self;
 }
 
 impl<T, U: BitSet> Entity<T, U> {
     fn new(id: T) -> Self {
-        let this = Self {
+        Self {
             id,
             bitmap: U::initialise(),
             components: Default::default(),
-        };
-        this
-        // this.add_many::<R>(components)
+        }
     }
 }
 
-impl<T, U: BitSet> ComponentOps for Entity<T, U> {
-    fn add<R: Register>(mut self, component: Box<Component>) -> Self {
+impl<T, U: BitSet> ComponentOps<U> for Entity<T, U> {
+    fn add<R: Register<U>>(mut self, component: Box<Component>) -> Self {
         if let Some(id) = R::get_id(component.deref().type_id()) {
             if let Ok(_) = self.bitmap.set(id as u8) {
                 self.components.push(component);
@@ -48,7 +46,7 @@ impl<T, U: BitSet> ComponentOps for Entity<T, U> {
         self
     }
 
-    fn add_many<R: Register>(mut self, components: Vec<Box<Component>>) -> Self {
+    fn add_many<R: Register<U>>(mut self, components: Vec<Box<Component>>) -> Self {
         for component in components {
             self = self.add::<R>(component);
         }
@@ -117,7 +115,6 @@ where
             ..Default::default()
         }
     }
-
     fn query(&self, mask: U) -> Vec<&Entity<T, U>> {
         self.entities
             .iter()
@@ -179,14 +176,10 @@ lazy_static! {
     static ref INDEX: Mutex<BitIndex> = Mutex::new(0);
 }
 
-// A world where we have 8 components
-pub type PrimitiveWorld = GenericWorld<u8, ComponentSet8>;
-// A world where we have 128 components
-pub type World = GenericWorld<u128, ComponentSet128>;
-
-pub trait Register {
+pub trait Register<U: BitSet> {
     fn register<A: Any>();
     fn get_id(type_id: TypeId) -> Option<BitIndex>;
+    fn mask<A: Any>() -> U;
 }
 
 fn register_state<A: Any>(state: &mut HashMap<TypeId, BitIndex>) {
@@ -197,7 +190,7 @@ fn register_state<A: Any>(state: &mut HashMap<TypeId, BitIndex>) {
     }
 }
 
-impl<T, U: BitSet> Register for GenericWorld<T, U> {
+impl<T, U: BitSet> Register<U> for GenericWorld<T, U> {
     fn register<A: Any>() {
         register_state::<A>(&mut (*WORLD_STATE.lock().unwrap()));
     }
@@ -205,4 +198,17 @@ impl<T, U: BitSet> Register for GenericWorld<T, U> {
     fn get_id(type_id: TypeId) -> Option<BitIndex> {
         WORLD_STATE.lock().unwrap().get(&type_id).map(|id| *id)
     }
+    fn mask<A: Any>() -> U {
+        if let Some(bit_index) = Self::get_id(TypeId::of::<A>()) {
+            let mut mask: U = 1.into();
+            mask = mask << (bit_index as u8).into();
+            return mask;
+        }
+        0.into()
+    }
 }
+
+// A world where we have 8 components
+pub type PrimitiveWorld = GenericWorld<u8, ComponentSet8>;
+// A world where we have 128 components
+pub type World = GenericWorld<u128, ComponentSet128>;
