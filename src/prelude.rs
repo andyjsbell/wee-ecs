@@ -1,2 +1,5 @@
 pub use crate::math::BitSet;
-pub use crate::{Entity, EntityOps, PrimitiveWorld, Register, Runnable, System, WorldOps};
+pub use crate::{
+    Component, Entity, EntityOps, PrimitiveWorld, Query, QueryOps, Register, Runnable, System,
+    WorldOps,
+};

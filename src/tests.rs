@@ -22,11 +22,9 @@ mod tests {
             .spawn(vec![Box::new(Age(32))]);
         // The mask needs to be easier to use, if I want to query for entities with Name and Age
         // I would naturally just use the types to build the query.
-        let mask = PrimitiveWorld::mask::<Name>() + PrimitiveWorld::mask::<Age>();
+        let mask = Query::<Name, Age>::query();
         let entities = world.query(mask);
         assert_eq!(entities.len(), 2);
-        let entity = entities[0];
-        assert_eq!(entity.components.len(), 1);
         world.add_system(mask, f);
         world.run();
     }
