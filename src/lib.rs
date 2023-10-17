@@ -13,17 +13,17 @@ use std::sync::Mutex;
 
 // Bit index, covers up to 128 bits(0-127) or 128 components
 pub type BitIndex = i8;
-pub type Component = dyn Any;
+pub type Component = Box<dyn Any>;
 
 pub struct Entity<T, U: BitSet> {
     id: T,
     bitmap: U,
-    components: Vec<Box<Component>>,
+    components: Vec<Component>,
 }
 
 trait ComponentOps<U: BitSet> {
-    fn add<R: Register<U>>(self, component: Box<Component>) -> Self;
-    fn add_many<R: Register<U>>(self, components: Vec<Box<Component>>) -> Self;
+    fn add<R: Register<U>>(self, component: Component) -> Self;
+    fn add_many<R: Register<U>>(self, components: Vec<Component>) -> Self;
 }
 
 impl<T, U: BitSet> Entity<T, U> {
@@ -37,7 +37,7 @@ impl<T, U: BitSet> Entity<T, U> {
 }
 
 impl<T, U: BitSet> ComponentOps<U> for Entity<T, U> {
-    fn add<R: Register<U>>(mut self, component: Box<Component>) -> Self {
+    fn add<R: Register<U>>(mut self, component: Component) -> Self {
         if let Some(id) = R::get_id(component.deref().type_id()) {
             if let Ok(_) = self.bitmap.set(id as u8) {
                 self.components.push(component);
@@ -47,7 +47,7 @@ impl<T, U: BitSet> ComponentOps<U> for Entity<T, U> {
         self
     }
 
-    fn add_many<R: Register<U>>(mut self, components: Vec<Box<Component>>) -> Self {
+    fn add_many<R: Register<U>>(mut self, components: Vec<Component>) -> Self {
         for component in components {
             self = self.add::<R>(component);
         }
@@ -66,7 +66,7 @@ pub struct GenericWorld<T, U: BitSet> {
 pub trait EntityOps<T, U: BitSet> {
     fn get_entity(&self, id: T) -> Option<&Entity<T, U>>;
 
-    fn spawn(self, components: Vec<Box<Component>>) -> Self;
+    fn spawn(self, components: Vec<Component>) -> Self;
 
     fn spawn_empty(self) -> Self;
 
@@ -81,7 +81,7 @@ where
         self.entities.get(&id)
     }
 
-    fn spawn(mut self, components: Vec<Box<Component>>) -> Self {
+    fn spawn(mut self, components: Vec<Component>) -> Self {
         let new_entity_id = self.entity_count.increment();
         let mut entity = Entity::new(new_entity_id);
         entity = entity.add_many::<Self>(components);
