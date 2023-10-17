@@ -7,12 +7,13 @@ use math::*;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Mutex;
 
 // Bit index, covers up to 128 bits(0-127) or 128 components
-type BitIndex = i8;
-type Component = dyn Any;
+pub type BitIndex = i8;
+pub type Component = dyn Any;
 
 pub struct Entity<T, U: BitSet> {
     id: T,
@@ -212,3 +213,33 @@ impl<T, U: BitSet> Register<U> for GenericWorld<T, U> {
 pub type PrimitiveWorld = GenericWorld<u8, ComponentSet8>;
 // A world where we have 128 components
 pub type World = GenericWorld<u128, ComponentSet128>;
+
+pub struct Query<A: Any, B: Any = (), C: Any = (), U: BitSet = ComponentSet8> {
+    q: Option<(
+        PhantomData<A>,
+        PhantomData<B>,
+        PhantomData<C>,
+        PhantomData<U>,
+    )>,
+}
+
+pub type Query16<A, B, C> = Query<A, B, C, ComponentSet16>;
+pub type Query32<A, B, C> = Query<A, B, C, ComponentSet32>;
+pub type Query64<A, B, C> = Query<A, B, C, ComponentSet64>;
+pub type Query128<A, B, C> = Query<A, B, C, ComponentSet128>;
+
+pub trait QueryOps<U> {
+    fn query() -> U;
+}
+impl<A, B, C, U> QueryOps<U> for Query<A, B, C, U>
+where
+    A: Any,
+    B: Any,
+    C: Any,
+    U: BitSet,
+{
+    fn query() -> U {
+        (PrimitiveWorld::mask::<A>() + PrimitiveWorld::mask::<B>() + PrimitiveWorld::mask::<C>())
+            .into()
+    }
+}
