@@ -220,7 +220,7 @@ pub type PrimitiveWorld = GenericWorld<u8, ComponentSet8>;
 pub type World = GenericWorld<u128, ComponentSet128>;
 
 pub struct Query<A: Any, B: Any = (), C: Any = (), U: BitSet = ComponentSet8> {
-    q: Option<(
+    _q: Option<(
         PhantomData<A>,
         PhantomData<B>,
         PhantomData<C>,
