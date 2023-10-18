@@ -10,17 +10,16 @@ mod tests {
 
     #[test]
     fn create_simple_world() {
-        fn f(mask: u8, entities: Vec<&Entity<u8, u8>>) {
-            println!("mask: {}", mask);
-            println!("entities: {}", entities.len());
+        const DOLLY: &str = "Dolly";
+        const AGE: u8 = 32;
+        fn f(_mask: u8, entities: Vec<&Entity<u8, u8>>) {
             for entity in entities {
-                println!("Entity {}", entity.id);
                 for component in &entity.components {
                     if let Some(name) = (*component).borrow().downcast_ref::<Name>() {
-                        println!("Your name is {:?}", name.0);
+                        assert_eq!(name.0, DOLLY);
                     }
                     if let Some(age) = (*component).borrow().downcast_ref::<Age>() {
-                        println!("Your age is {:?}", age.0);
+                        assert_eq!(age.0, AGE);
                     }
                 }
             }
@@ -31,14 +30,21 @@ mod tests {
         let mut world = world
             .spawn(vec![
                 RefCell::new(Box::new(Name("Andy".to_owned()))),
-                RefCell::new(Box::new(Age(50))),
+                RefCell::new(Box::new(Age(AGE))),
             ])
-            .spawn(vec![RefCell::new(Box::new(Age(32)))]);
-        // The mask needs to be easier to use, if I want to query for entities with Name and Age
-        // I would naturally just use the types to build the query.
-        let mask = Query::<Name, Age>::query();
-        let entities = world.query(mask);
-        assert_eq!(entities.len(), 2);
+            .spawn(vec![RefCell::new(Box::new(Age(AGE)))]);
+
+        // Run query for entities with just a 'Name' component and update the name to "Dolly"
+        // This would be asserted on in the system callback
+        let mask = Query::<Name>::query();
+        {
+            let entities = world.query(mask);
+            assert_eq!(entities.len(), 1);
+            let mut component = entities[0].components[0].borrow_mut();
+            let component = (*component).downcast_mut::<Name>().expect("Name component");
+            assert_eq!(component.0, "Andy");
+            component.0 = DOLLY.to_owned();
+        }
         world.add_system(mask, f);
         world.run();
     }
