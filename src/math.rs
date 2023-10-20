@@ -1,7 +1,17 @@
-use std::convert::Into;
-use std::fmt::Display;
-use std::mem;
-use std::ops::{Add, BitAnd, BitOr, Not, Shl};
+#[cfg(not(feature = "std"))]
+use core::{
+    convert::Into,
+    fmt::Display,
+    mem,
+    ops::{Add, BitAnd, BitOr, Not, Shl},
+};
+#[cfg(feature = "std")]
+use std::{
+    convert::Into,
+    fmt::Display,
+    mem,
+    ops::{Add, BitAnd, BitOr, Not, Shl},
+};
 
 pub enum Bit {
     Off,

@@ -1,16 +1,36 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 mod math;
-mod prelude;
+pub mod prelude;
 mod tests;
 
-use lazy_static::lazy_static;
 use math::*;
-use std::any::{Any, TypeId};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::marker::PhantomData;
-use std::sync::Mutex;
 
+#[cfg(not(feature = "std"))]
+use core::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    hash::Hash,
+    marker::PhantomData,
+};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, vec, vec::Vec};
+
+#[cfg(feature = "std")]
+use lazy_static::lazy_static;
+#[cfg(feature = "std")]
+use std::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    collections::HashMap,
+    hash::Hash,
+    marker::PhantomData,
+    sync::Mutex,
+};
 // Bit index, covers up to 128 bits(0-127) or 128 components
 pub type BitIndex = i8;
 pub type WrappedComponent = RefCell<Box<dyn Any>>;
@@ -173,33 +193,62 @@ pub type ComponentSet32 = u32;
 pub type ComponentSet64 = u64;
 pub type ComponentSet128 = u128;
 
-lazy_static! {
-    static ref WORLD_STATE: Mutex<HashMap<TypeId, BitIndex>> = Mutex::new(HashMap::new());
-    static ref INDEX: Mutex<BitIndex> = Mutex::new(0);
-}
-
 pub trait Register<U: BitSet> {
     fn register<A: Any>();
     fn get_id(type_id: TypeId) -> Option<BitIndex>;
     fn mask<A: Any>() -> U;
 }
 
+#[cfg(feature = "std")]
+lazy_static! {
+    static ref WORLD_STATE: Mutex<HashMap<TypeId, BitIndex>> = Mutex::new(HashMap::new());
+    static ref INDEX: Mutex<BitIndex> = Mutex::new(0);
+}
+#[cfg(not(feature = "std"))]
+static mut WORLD_STATE: Option<HashMap<TypeId, BitIndex>> = None;
+#[cfg(not(feature = "std"))]
+static mut INDEX: BitIndex = 0;
+
+#[cfg(not(feature = "std"))]
+fn get_world_state() -> &'static mut HashMap<TypeId, BitIndex> {
+    unsafe {
+        if WORLD_STATE == None {
+            WORLD_STATE = Some(HashMap::new())
+        }
+
+        WORLD_STATE.as_mut().unwrap()
+    }
+}
 fn register_state<A: Any>(state: &mut HashMap<TypeId, BitIndex>) {
     if !(*state).contains_key(&TypeId::of::<A>()) {
-        let mut index = INDEX.lock().unwrap();
-        state.insert(TypeId::of::<A>(), (*index).into());
-        *index += 1;
+        #[cfg(feature = "std")]
+        {
+            let mut index = INDEX.lock().unwrap();
+            state.insert(TypeId::of::<A>(), (*index).into());
+            *index += 1;
+        }
+        #[cfg(not(feature = "std"))]
+        unsafe {
+            state.insert(TypeId::of::<A>(), INDEX);
+            INDEX += 1;
+        }
     }
 }
 
 impl<T, U: BitSet> Register<U> for GenericWorld<T, U> {
     fn register<A: Any>() {
+        #[cfg(feature = "std")]
         register_state::<A>(&mut (*WORLD_STATE.lock().unwrap()));
+        #[cfg(not(feature = "std"))]
+        register_state::<A>(get_world_state());
     }
 
     fn get_id(type_id: TypeId) -> Option<BitIndex> {
         if TypeId::of::<()>() != type_id {
+            #[cfg(feature = "std")]
             return WORLD_STATE.lock().unwrap().get(&type_id).map(|id| *id);
+            #[cfg(not(feature = "std"))]
+            return get_world_state().get(&type_id).map(|id| *id);
         }
 
         None
