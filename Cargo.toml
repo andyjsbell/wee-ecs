@@ -4,4 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-lazy_static = "1.4.0"
+lazy_static = { version = "1.4.0" }
+hashbrown = { version = "0.14.1", optional = true }
+tinyvec = "1.6.0"
+
+[features]
+default = ["std"]
+std = []
+nostd = ["dep:hashbrown"]

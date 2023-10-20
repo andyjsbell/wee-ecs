@@ -1,6 +1,13 @@
 #[cfg(test)]
 mod tests {
+
     use crate::prelude::*;
+    #[cfg(not(feature = "std"))]
+    use alloc::{borrow::ToOwned, boxed::Box, string::String, vec, vec::Vec};
+    #[cfg(not(feature = "std"))]
+    use core::cell::RefCell;
+
+    #[cfg(feature = "std")]
     use std::cell::RefCell;
 
     #[derive(Debug)]
